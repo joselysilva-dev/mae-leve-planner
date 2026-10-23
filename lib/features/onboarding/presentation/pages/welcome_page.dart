@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../home/presentation/pages/home_page.dart';
 
 class WelcomePage extends StatelessWidget {
   const WelcomePage({super.key});
@@ -15,17 +16,12 @@ class WelcomePage extends StatelessWidget {
             children: [
               const Spacer(),
 
-              Container(
-                width: 112,
-                height: 112,
-                decoration: const BoxDecoration(
-                  color: AppColors.primaryLight,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.favorite_rounded,
-                  size: 54,
-                  color: AppColors.primary,
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 112),
+                child: Image.asset(
+                  'assets/images/branding/mlp-simbolo-positivo-512px.png',
+                  fit: BoxFit.contain,
+                  excludeFromSemantics: true,
                 ),
               ),
 
@@ -59,7 +55,14 @@ class WelcomePage extends StatelessWidget {
                 button: true,
                 label: 'Começar a usar o Mãe Leve',
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (context) => const HomePage(),
+                      ),
+                    );
+                  },
                   child: const Text(
                     'Começar',
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
