@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/brazilian_format.dart';
+import '../../../../app/app_scope.dart';
+import '../../../profile/data/profile_storage.dart';
 import '../../data/task_storage.dart';
 import '../../domain/task.dart';
 import '../controllers/tasks_controller.dart';
@@ -37,10 +39,26 @@ class _TasksPageState extends State<TasksPage> {
   }
 
   Future<void> _edit([Task? task]) async {
+    bool defaultReminder = false;
+    final scope = AppScope.maybeOf(context);
+    if (task == null && scope != null) {
+      try {
+        defaultReminder = (await ProfileStorage(
+          scope.preferences,
+        ).load()).taskReminders;
+      } catch (_) {
+        /* Um perfil indisponível não impede uma tarefa sem lembrete. */
+      }
+    }
+    if (!mounted) return;
     final saved = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => TaskFormPage(controller: _controller, task: task),
+        builder: (_) => TaskFormPage(
+          controller: _controller,
+          task: task,
+          defaultReminder: defaultReminder,
+        ),
       ),
     );
     if (saved == true) _feedback('Tarefa salva. Um passo de cada vez!');

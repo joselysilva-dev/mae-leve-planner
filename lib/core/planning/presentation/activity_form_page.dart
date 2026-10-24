@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../utils/brazilian_format.dart';
+import '../../theme/app_metrics.dart';
+import '../../widgets/figma_icon.dart';
+import '../../widgets/planner_form_fields.dart';
 import '../domain/planned_activity.dart';
 import 'activities_controller.dart';
 
@@ -12,18 +14,21 @@ class ActivityFormPage extends StatefulWidget {
     this.activity,
     this.initialDate,
     this.suggestion,
+    this.initialCategory,
   });
   final ActivitiesController controller;
   final bool routine;
   final PlannedActivity? activity;
   final DateTime? initialDate;
   final String? suggestion;
+  final String? initialCategory;
   @override
   State<ActivityFormPage> createState() => _ActivityFormPageState();
 }
 
 class _ActivityFormPageState extends State<ActivityFormPage> {
   final _form = GlobalKey<FormState>();
+  final _scroll = ScrollController();
   late final TextEditingController _title;
   late String _category;
   DateTime? _date;
@@ -36,13 +41,19 @@ class _ActivityFormPageState extends State<ActivityFormPage> {
       text: widget.activity?.title ?? widget.suggestion,
     );
     _category =
-        widget.activity?.category ?? widget.controller.storage.categories.first;
-    _date = widget.activity?.date ?? widget.initialDate;
+        widget.activity?.category ??
+        widget.initialCategory ??
+        widget.controller.storage.categories.first;
+    _date =
+        widget.activity?.date ??
+        widget.initialDate ??
+        (widget.routine ? DateUtils.dateOnly(DateTime.now()) : null);
     _minutes = widget.activity?.minutes;
   }
 
   @override
   void dispose() {
+    _scroll.dispose();
     _title.dispose();
     super.dispose();
   }
@@ -59,23 +70,20 @@ class _ActivityFormPageState extends State<ActivityFormPage> {
   }
 
   Future<void> _chooseTime() async {
-    final time = await showTimePicker(
-      context: context,
-      initialTime: _minutes == null
-          ? const TimeOfDay(hour: 9, minute: 0)
-          : TimeOfDay(hour: _minutes! ~/ 60, minute: _minutes! % 60),
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-        child: child!,
-      ),
-    );
-    if (mounted && time != null) {
-      setState(() => _minutes = time.hour * 60 + time.minute);
-    }
+    final minutes = await pickPlannerTime(context, _minutes);
+    if (mounted && minutes != null) setState(() => _minutes = minutes);
   }
 
   Future<void> _save() async {
-    if (_saving || !_form.currentState!.validate()) return;
+    if (_saving) return;
+    if (!_form.currentState!.validate()) {
+      await _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() => _saving = true);
     final item =
@@ -114,23 +122,35 @@ class _ActivityFormPageState extends State<ActivityFormPage> {
       appBar: AppBar(
         title: Text(
           widget.activity != null
-              ? 'Editar atividade'
+              ? widget.routine
+                    ? 'Editar compromisso'
+                    : 'Editar atividade'
               : widget.routine
               ? 'Novo compromisso'
               : 'Nova atividade',
         ),
       ),
       body: SafeArea(
+        top: false,
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
+            constraints: const BoxConstraints(maxWidth: AppSpacing.formWidth),
             child: Form(
               key: _form,
               child: ListView(
-                padding: const EdgeInsets.all(24),
+                controller: _scroll,
+                padding: AppSpacing.page,
                 children: [
+                  Text(
+                    widget.routine
+                        ? 'Organize seu dia com espaço para respirar.'
+                        : 'Um pequeno cuidado, no seu tempo.',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
                   TextFormField(
+                    key: const ValueKey('activity-title'),
                     controller: _title,
                     enabled: !_saving,
                     decoration: const InputDecoration(
@@ -142,10 +162,11 @@ class _ActivityFormPageState extends State<ActivityFormPage> {
                         ? 'Escreva um título para a atividade.'
                         : null,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpacing.lg),
                   DropdownButtonFormField<String>(
                     initialValue: _category,
                     isExpanded: true,
+                    icon: const FigmaIcon(FigmaSymbol.dropdown),
                     decoration: const InputDecoration(labelText: 'Categoria'),
                     items: widget.controller.storage.categories
                         .map(
@@ -159,58 +180,25 @@ class _ActivityFormPageState extends State<ActivityFormPage> {
                         ? null
                         : (value) => setState(() => _category = value!),
                   ),
-                  const SizedBox(height: 20),
-                  OutlinedButton.icon(
-                    onPressed: _saving ? null : _chooseDate,
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(48, 52),
-                    ),
-                    icon: const Icon(Icons.calendar_month_outlined),
-                    label: Text(
-                      _date == null
-                          ? 'Adicionar data (opcional)'
-                          : 'Data: ${brazilianDate(_date!)}',
-                    ),
+                  const SizedBox(height: AppSpacing.lg),
+                  PlannerDateTimeFields(
+                    date: _date,
+                    minutes: _minutes,
+                    showTime: widget.routine,
+                    enabled: !_saving,
+                    requiredDate: widget.routine,
+                    onDate: _chooseDate,
+                    onTime: _chooseTime,
+                    onClearDate: () => setState(() => _date = null),
+                    onClearTime: () => setState(() => _minutes = null),
                   ),
-                  if (_date != null && !widget.routine)
-                    TextButton(
-                      onPressed: _saving
-                          ? null
-                          : () => setState(() => _date = null),
-                      child: const Text('Remover data'),
-                    ),
-                  if (widget.routine) ...[
-                    const SizedBox(height: 20),
-                    OutlinedButton.icon(
-                      onPressed: _saving ? null : _chooseTime,
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(48, 52),
-                      ),
-                      icon: const Icon(Icons.schedule),
-                      label: Text(
-                        _minutes == null
-                            ? 'Adicionar horário (opcional)'
-                            : 'Horário: ${(_minutes! ~/ 60).toString().padLeft(2, '0')}:${(_minutes! % 60).toString().padLeft(2, '0')}',
-                      ),
-                    ),
-                    if (_minutes != null)
-                      TextButton(
-                        onPressed: _saving
-                            ? null
-                            : () => setState(() => _minutes = null),
-                        child: const Text('Remover horário'),
-                      ),
-                  ],
-                  const SizedBox(height: 32),
-                  ElevatedButton(
-                    onPressed: _saving ? null : _save,
-                    child: Text(_saving ? 'Salvando…' : 'Salvar'),
+                  const SizedBox(height: AppSpacing.xl),
+                  PlannerFormActions(
+                    saving: _saving,
+                    onSave: _save,
+                    onCancel: () => Navigator.pop(context),
                   ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _saving ? null : () => Navigator.pop(context),
-                    child: const Text('Cancelar'),
-                  ),
+                  const SizedBox(height: AppSpacing.lg),
                 ],
               ),
             ),

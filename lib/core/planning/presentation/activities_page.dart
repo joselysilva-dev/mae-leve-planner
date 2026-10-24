@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_metrics.dart';
 import '../../utils/brazilian_format.dart';
+import '../../widgets/figma_icon.dart';
+import '../../widgets/planner_components.dart';
 import '../data/activity_storage.dart';
 import '../domain/planned_activity.dart';
 import 'activities_controller.dart';
@@ -13,9 +16,13 @@ class ActivitiesPage extends StatefulWidget {
     super.key,
     required this.storage,
     required this.routine,
+    this.embedded = false,
+    this.active = true,
   });
   final ActivityStorage storage;
   final bool routine;
+  final bool embedded;
+  final bool active;
   @override
   State<ActivitiesPage> createState() => _ActivitiesPageState();
 }
@@ -23,7 +30,9 @@ class ActivitiesPage extends StatefulWidget {
 class _ActivitiesPageState extends State<ActivitiesPage> {
   late final ActivitiesController _controller;
   DateTime _day = DateUtils.dateOnly(DateTime.now());
+  late DateTime _start = _day.subtract(const Duration(days: 1));
   int _filter = 0;
+  final _daysScroll = ScrollController(keepScrollOffset: false);
   @override
   void initState() {
     super.initState();
@@ -31,8 +40,15 @@ class _ActivitiesPageState extends State<ActivitiesPage> {
   }
 
   @override
+  void didUpdateWidget(ActivitiesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.active && widget.active) _controller.load();
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
+    _daysScroll.dispose();
     super.dispose();
   }
 
@@ -44,7 +60,11 @@ class _ActivitiesPageState extends State<ActivitiesPage> {
     }
   }
 
-  Future<void> _edit({PlannedActivity? activity, String? suggestion}) async {
+  Future<void> _edit({
+    PlannedActivity? activity,
+    String? suggestion,
+    String? category,
+  }) async {
     final saved = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -53,6 +73,7 @@ class _ActivitiesPageState extends State<ActivitiesPage> {
           routine: widget.routine,
           activity: activity,
           suggestion: suggestion,
+          initialCategory: category,
           initialDate: widget.routine ? _day : null,
         ),
       ),
@@ -64,6 +85,45 @@ class _ActivitiesPageState extends State<ActivitiesPage> {
             : 'Atividade salva. Reserve esse carinho para você.',
       );
     }
+  }
+
+  Future<void> _suggestions() async {
+    final suggestion = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: AppSpacing.page,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Sugestões rápidas',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              ...['Fazer uma pausa', 'Ler por prazer', 'Alongar o corpo'].map(
+                (title) => ListTile(
+                  leading: const FigmaIcon(FigmaSymbol.heart),
+                  title: Text(title),
+                  onTap: () => Navigator.pop(context, title),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || suggestion == null) return;
+    await _edit(
+      suggestion: suggestion,
+      category: suggestion == 'Alongar o corpo'
+          ? 'Movimento'
+          : suggestion == 'Ler por prazer'
+          ? 'Lazer'
+          : 'Descanso',
+    );
   }
 
   Future<void> _toggle(PlannedActivity activity) async {
@@ -124,61 +184,139 @@ class _ActivitiesPageState extends State<ActivitiesPage> {
     return result;
   }
 
+  void _changePeriod(int days) {
+    if (_daysScroll.hasClients) _daysScroll.jumpTo(0);
+    setState(() {
+      _start = _start.add(Duration(days: days));
+      _day = _day.add(Duration(days: days));
+    });
+  }
+
   Widget _week() {
-    final monday = _day.subtract(Duration(days: _day.weekday - 1));
     const weekdays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+    final requestedScale = MediaQuery.textScalerOf(context).scale(1);
+    final scale = requestedScale < 1 ? 1.0 : requestedScale;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_daysScroll.hasClients) return;
+      final position = _daysScroll.position;
+      if (!position.hasContentDimensions) return;
+      final index = _day.difference(_start).inDays;
+      final left = index * (64 * scale + AppSpacing.md);
+      final right = left + 64 * scale;
+      if (left < position.pixels ||
+          right > position.pixels + position.viewportDimension) {
+        _daysScroll.jumpTo(left.clamp(0.0, position.maxScrollExtent));
+      }
+    });
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
+            Expanded(
+              child: Text('${brazilianMonth(_day)} · sua semana com clareza'),
+            ),
             IconButton(
               tooltip: 'Semana anterior',
-              onPressed: () =>
-                  setState(() => _day = _day.subtract(const Duration(days: 7))),
+              onPressed: () => _changePeriod(-7),
               icon: const Icon(Icons.chevron_left),
-            ),
-            Expanded(
-              child: Text(
-                '${brazilianDate(monday)} a ${brazilianDate(monday.add(const Duration(days: 6)))}',
-                textAlign: TextAlign.center,
-              ),
             ),
             IconButton(
               tooltip: 'Próxima semana',
-              onPressed: () =>
-                  setState(() => _day = _day.add(const Duration(days: 7))),
+              onPressed: () => _changePeriod(7),
               icon: const Icon(Icons.chevron_right),
             ),
           ],
         ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: List.generate(7, (index) {
-            final date = monday.add(Duration(days: index));
-            return Semantics(
-              label: 'Selecionar ${brazilianDate(date)}',
-              child: ChoiceChip(
-                label: Text(
-                  '${weekdays[index]} ${date.day.toString().padLeft(2, '0')}',
+        const SizedBox(height: AppSpacing.md),
+        SizedBox(
+          height: 72 + (scale - 1) * 44,
+          child: ListView.separated(
+            key: const ValueKey('agenda-days'),
+            controller: _daysScroll,
+            primary: false,
+            scrollDirection: Axis.horizontal,
+            itemCount: 7,
+            separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.md),
+            itemBuilder: (context, index) {
+              final date = _start.add(Duration(days: index));
+              final selected = sameDay(date, _day);
+              return SizedBox(
+                width: 64 * scale,
+                child: Semantics(
+                  button: true,
+                  selected: selected,
+                  label: 'Selecionar ${brazilianDate(date)}',
+                  child: Material(
+                    color: selected
+                        ? AppColors.primaryStrong
+                        : AppColors.surface,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadii.control),
+                      side: BorderSide(
+                        color: selected
+                            ? AppColors.primaryStrong
+                            : AppColors.border,
+                      ),
+                    ),
+                    child: InkWell(
+                      key: ValueKey('agenda-day-$index'),
+                      onTap: () => setState(() => _day = date),
+                      borderRadius: BorderRadius.circular(AppRadii.control),
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              weekdays[date.weekday - 1],
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: selected
+                                        ? AppColors.textOnPrimary
+                                        : AppColors.textSecondary,
+                                  ),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              date.day.toString().padLeft(2, '0'),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: selected
+                                        ? AppColors.textOnPrimary
+                                        : AppColors.textPrimary,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-                selected: sameDay(date, _day),
-                selectedColor: AppColors.primaryLight,
-                materialTapTargetSize: MaterialTapTargetSize.padded,
-                onSelected: (_) => setState(() => _day = date),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                brazilianLongDate(_day),
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-            );
-          }),
-        ),
-        TextButton(
-          onPressed: () =>
-              setState(() => _day = DateUtils.dateOnly(DateTime.now())),
-          child: const Text('Hoje'),
-        ),
-        Text(
-          'Seu dia: ${brazilianDate(_day)}',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            TextButton(
+              onPressed: () {
+                if (_daysScroll.hasClients) _daysScroll.jumpTo(0);
+                setState(() {
+                  _day = DateUtils.dateOnly(DateTime.now());
+                  _start = _day.subtract(const Duration(days: 1));
+                });
+              },
+              child: const Text('Hoje'),
+            ),
+          ],
         ),
       ],
     );
@@ -193,28 +331,23 @@ class _ActivitiesPageState extends State<ActivitiesPage> {
         canPop: !_controller.saving,
         child: Scaffold(
           appBar: AppBar(
-            title: Text(widget.routine ? 'Rotina' : 'Autocuidado'),
+            automaticallyImplyLeading: !widget.embedded,
+            title: Text(widget.routine ? 'Agenda' : 'Autocuidado'),
           ),
-          floatingActionButton: _controller.loading || _controller.error != null
-              ? null
-              : FloatingActionButton.extended(
-                  onPressed: _controller.saving ? null : () => _edit(),
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.textOnPrimary,
-                  icon: const Icon(Icons.add),
-                  label: Text(
-                    widget.routine ? 'Novo compromisso' : 'Nova atividade',
-                  ),
-                ),
           body: SafeArea(
-            child: Center(
+            top: false,
+            bottom: !widget.embedded,
+            child: Align(
+              alignment: Alignment.topCenter,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
+                constraints: const BoxConstraints(
+                  maxWidth: AppSpacing.contentWidth,
+                ),
                 child: _controller.loading
                     ? const Center(child: CircularProgressIndicator())
                     : _controller.error != null
                     ? SingleChildScrollView(
-                        padding: const EdgeInsets.all(24),
+                        padding: AppSpacing.page,
                         child: Column(
                           children: [
                             Text(
@@ -228,147 +361,153 @@ class _ActivitiesPageState extends State<ActivitiesPage> {
                           ],
                         ),
                       )
-                    : CustomScrollView(
-                        slivers: [
-                          SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-                            sliver: SliverToBoxAdapter(
+                    : ListView(
+                        key: PageStorageKey(
+                          widget.routine ? 'agenda-scroll' : 'care-scroll',
+                        ),
+                        padding: AppSpacing.page,
+                        children: [
+                          if (widget.routine)
+                            _week()
+                          else ...[
+                            Text(
+                              'Cuidar de você faz parte da rotina, não é uma recompensa.',
+                              style: Theme.of(context).textTheme.bodyLarge,
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                            CarePrompt(onTap: _suggestions),
+                            const SizedBox(height: AppSpacing.lg),
+                            Wrap(
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.sm,
+                              children: List.generate(
+                                3,
+                                (index) => ChoiceChip(
+                                  label: Text(
+                                    ['Todas', 'Pendentes', 'Realizadas'][index],
+                                  ),
+                                  selected: _filter == index,
+                                  selectedColor: AppColors.primarySoft,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.padded,
+                                  onSelected: (_) =>
+                                      setState(() => _filter = index),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                          ],
+                          PlannerSurface(
+                            outlined: !widget.routine,
+                            color: widget.routine
+                                ? AppColors.background
+                                : AppColors.surface,
+                            padding: widget.routine
+                                ? EdgeInsets.zero
+                                : const EdgeInsets.all(AppSpacing.md),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (!widget.routine)
+                                  Text(
+                                    'Pequenos cuidados',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium,
+                                  ),
+                                if (items.isEmpty)
+                                  PlannerEmptyState(
+                                    title: widget.routine
+                                        ? 'Um dia com espaço para o que importa'
+                                        : 'Um momento só seu',
+                                    message: widget.routine
+                                        ? 'Nenhum compromisso neste dia. Planeje no seu ritmo.'
+                                        : 'Nenhuma atividade neste filtro. Pequenos cuidados também contam.',
+                                  ),
+                                ...List.generate(
+                                  items.length,
+                                  (index) => Column(
+                                    children: [
+                                      if (index != 0) const Divider(height: 1),
+                                      ActivityCard(
+                                        key: ValueKey(items[index].id),
+                                        activity: items[index],
+                                        compact: true,
+                                        enabled: !_controller.saving,
+                                        onToggle: () => _toggle(items[index]),
+                                        onEdit: () =>
+                                            _edit(activity: items[index]),
+                                        onDelete: () => _delete(items[index]),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          if (!widget.routine) ...[
+                            PlannerSurface(
+                              color: AppColors.primarySoft,
+                              outlined: false,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  if (widget.routine)
-                                    _week()
-                                  else ...[
-                                    const Text(
-                                      'Você também merece cuidado',
-                                      style: TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    const Text(
-                                      'Escolha algo que faça sentido para você, sem cobranças.',
-                                      style: TextStyle(
-                                        color: AppColors.textSecondary,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children:
-                                          [
-                                                'Fazer uma pausa',
-                                                'Ler por prazer',
-                                                'Alongar o corpo',
-                                              ]
-                                              .map(
-                                                (suggestion) => ActionChip(
-                                                  label: Text(suggestion),
-                                                  tooltip:
-                                                      'Criar atividade: $suggestion',
-                                                  materialTapTargetSize:
-                                                      MaterialTapTargetSize
-                                                          .padded,
-                                                  onPressed: _controller.saving
-                                                      ? null
-                                                      : () => _edit(
-                                                          suggestion:
-                                                              suggestion,
-                                                        ),
-                                                ),
-                                              )
-                                              .toList(),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: List.generate(
-                                        3,
-                                        (index) => ChoiceChip(
-                                          label: Text(
-                                            [
-                                              'Todas',
-                                              'Pendentes',
-                                              'Realizadas',
-                                            ][index],
+                                  Text(
+                                    'Como você está hoje?',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(color: AppColors.primaryInk),
+                                  ),
+                                  const SizedBox(height: AppSpacing.sm),
+                                  const Text(
+                                    'Não existe resposta certa. Perceber seus limites também é cuidado.',
+                                  ),
+                                  const SizedBox(height: AppSpacing.sm),
+                                  OutlinedButton.icon(
+                                    onPressed: _controller.saving
+                                        ? null
+                                        : () => _edit(
+                                            suggestion:
+                                                'Meu momento de cuidado',
+                                            category: 'Momento para mim',
                                           ),
-                                          selected: _filter == index,
-                                          selectedColor: AppColors.primaryLight,
-                                          materialTapTargetSize:
-                                              MaterialTapTargetSize.padded,
-                                          onSelected: (_) =>
-                                              setState(() => _filter = index),
-                                        ),
-                                      ),
+                                    icon: const FigmaIcon(
+                                      FigmaSymbol.editMoment,
                                     ),
-                                  ],
+                                    label: const Text('Registrar meu momento'),
+                                  ),
                                 ],
                               ),
                             ),
-                          ),
-                          if (items.isEmpty)
-                            SliverPadding(
-                              padding: const EdgeInsets.all(32),
-                              sliver: SliverToBoxAdapter(
-                                child: Column(
-                                  children: [
-                                    Icon(
-                                      widget.routine
-                                          ? Icons.calendar_month_outlined
-                                          : Icons.spa_outlined,
-                                      size: 56,
-                                      color: AppColors.primary,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      widget.routine
-                                          ? 'Um dia com espaço para o que importa'
-                                          : 'Um momento só seu',
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      widget.routine
-                                          ? 'Nenhum compromisso neste dia. Planeje no seu ritmo.'
-                                          : 'Nenhuma atividade neste filtro. Pequenos cuidados também contam.',
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        color: AppColors.textSecondary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                          else
-                            SliverPadding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                              ),
-                              sliver: SliverList.builder(
-                                itemCount: items.length,
-                                itemBuilder: (context, index) => ActivityCard(
-                                  key: ValueKey(items[index].id),
-                                  activity: items[index],
-                                  enabled: !_controller.saving,
-                                  onToggle: () => _toggle(items[index]),
-                                  onEdit: () => _edit(activity: items[index]),
-                                  onDelete: () => _delete(items[index]),
-                                ),
-                              ),
+                            const SizedBox(height: AppSpacing.lg),
+                          ],
+                          ElevatedButton.icon(
+                            key: ValueKey(
+                              widget.routine ? 'add-appointment' : 'add-care',
                             ),
-                          const SliverToBoxAdapter(
-                            child: SizedBox(height: 120),
+                            onPressed: _controller.saving
+                                ? null
+                                : () => _edit(),
+                            icon: FigmaIcon(
+                              widget.routine
+                                  ? FigmaSymbol.appointment
+                                  : FigmaSymbol.careButton,
+                            ),
+                            label: Text(
+                              widget.routine
+                                  ? 'Adicionar compromisso'
+                                  : 'Reservar um tempo para mim',
+                            ),
                           ),
+                          const SizedBox(height: AppSpacing.lg),
+                          Text(
+                            widget.routine
+                                ? 'Deixe espaço entre os compromissos. Seu tempo também importa.'
+                                : 'Cada pequeno cuidado conta. No seu tempo.',
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
                         ],
                       ),
               ),

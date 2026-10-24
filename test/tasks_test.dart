@@ -32,8 +32,13 @@ void main() {
     await tester.tap(find.text('Nova tarefa'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).first, title);
-    await tester.ensureVisible(find.text('Salvar'));
-    await tester.tap(find.text('Salvar'));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('save-form')),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('save-form')));
     await tester.pumpAndSettle();
   }
 
@@ -42,7 +47,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Começar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Tarefas'));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('all-tasks')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('all-tasks')));
     await tester.pumpAndSettle();
     expect(find.byType(TasksPage), findsOneWidget);
     await tester.tap(find.byType(BackButton));
@@ -55,16 +66,26 @@ void main() {
     expect(find.text('Um passo de cada vez'), findsOneWidget);
     await tester.tap(find.text('Nova tarefa'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Salvar'));
-    await tester.tap(find.text('Salvar'));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('save-form')),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('save-form')));
     await tester.pumpAndSettle();
     expect(find.text('Escreva um título para a tarefa.'), findsOneWidget);
     await tester.enterText(
       find.byType(TextFormField).first,
       '  Preparar lanche  ',
     );
-    await tester.ensureVisible(find.text('Salvar'));
-    await tester.tap(find.text('Salvar'));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('save-form')),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('save-form')));
     await tester.pumpAndSettle();
     expect(find.text('Preparar lanche'), findsOneWidget);
     expect((await storage.load()).single.title, 'Preparar lanche');
@@ -124,8 +145,13 @@ void main() {
       'Caminhar no parque',
     );
     await tester.enterText(find.byType(TextFormField).last, 'Com calma');
-    await tester.ensureVisible(find.text('Salvar'));
-    await tester.tap(find.text('Salvar'));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('save-form')),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('save-form')));
     await tester.pumpAndSettle();
     final edited = (await storage.load()).single;
     expect(edited.title, 'Caminhar no parque');
@@ -202,10 +228,11 @@ void main() {
     await tester.tap(find.text('Nova tarefa'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text('Salvar'),
+      find.byKey(const ValueKey('save-form')),
       150,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 }

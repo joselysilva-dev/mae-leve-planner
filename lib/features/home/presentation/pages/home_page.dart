@@ -1,23 +1,32 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../app/app_scope.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_metrics.dart';
 import '../../../../core/utils/brazilian_format.dart';
-import '../../../tasks/data/task_storage.dart';
-import '../../../routine/presentation/pages/routine_page.dart';
-import '../../../self_care/presentation/pages/self_care_page.dart';
+import '../../../../core/widgets/figma_icon.dart';
+import '../../../../core/widgets/planner_components.dart';
+import '../../../../core/planning/presentation/appointment_card.dart';
 import '../../../profile/presentation/pages/profile_page.dart';
-import '../home_controller.dart';
+import '../../../self_care/presentation/pages/self_care_page.dart';
+import '../../../tasks/domain/task.dart';
+import '../../../tasks/presentation/pages/task_form_page.dart';
 import '../../../tasks/presentation/pages/tasks_page.dart';
+import '../../../tasks/presentation/widgets/task_card.dart';
+import '../../../tasks/data/task_storage.dart';
+import '../home_controller.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.active = true, this.onSelectTab});
+  final bool active;
+  final ValueChanged<int>? onSelectTab;
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   HomeController? _controller;
+  String? _feedback;
   @override
   void initState() {
     super.initState();
@@ -31,8 +40,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   @override
+  void didUpdateWidget(HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.active && widget.active) _controller?.load();
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _controller?.load();
+    if (state == AppLifecycleState.resumed && widget.active) {
+      _controller?.load();
+    }
   }
 
   @override
@@ -50,257 +67,270 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (mounted) await _controller!.load();
   }
 
+  Future<void> _edit([Task? task]) async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TaskFormPage(
+          controller: _controller!.tasks,
+          task: task,
+          defaultReminder: _controller!.settings.taskReminders,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (saved == true) {
+      setState(() => _feedback = 'Tarefa salva. Um passo de cada vez!');
+    }
+  }
+
+  Future<void> _toggle(Task task) async {
+    final saved = await _controller!.tasks.toggle(task);
+    if (mounted) {
+      setState(
+        () => _feedback = saved
+            ? task.completed
+                  ? 'Tarefa marcada como pendente.'
+                  : 'Tarefa concluída com sucesso.'
+            : 'Não foi possível atualizar a tarefa. Tente novamente.',
+      );
+    }
+  }
+
+  Future<void> _delete(Task task) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir tarefa?'),
+        content: Text(
+          'Deseja excluir “${task.title}”? Esta ação não pode ser desfeita.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final saved = await _controller!.tasks.delete(task);
+    if (mounted) {
+      setState(
+        () => _feedback = saved
+            ? 'Tarefa excluída.'
+            : 'Não foi possível excluir. Tente novamente.',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = _controller!;
     return ListenableBuilder(
       listenable: controller,
-      builder: (context, _) => Scaffold(
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Olá, ${controller.name.isEmpty ? 'mamãe' : controller.name}! 👋',
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Perfil e configurações',
-                      onPressed: () => _open(const ProfilePage()),
-                      icon: const Icon(
-                        Icons.person_outline,
-                        color: AppColors.primaryDark,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Vamos deixar o seu dia mais leve?',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 16,
+      builder: (context, _) {
+        final today = controller.todayTasks;
+        final completed = today.where((item) => item.completed).length;
+        return PopScope(
+          canPop: !controller.tasks.saving,
+          child: Scaffold(
+            body: SafeArea(
+              bottom: false,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: AppSpacing.contentWidth,
                   ),
-                ),
-                const SizedBox(height: 28),
-                if (controller.hasError) ...[
-                  const Text(
-                    'Alguns dados não puderam ser atualizados.',
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                  TextButton(
-                    onPressed: controller.loading ? null : controller.load,
-                    child: const Text('Atualizar dados'),
-                  ),
-                ],
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: ListView(
+                    key: const PageStorageKey('home-scroll'),
+                    padding: AppSpacing.page,
                     children: [
-                      Icon(
-                        Icons.wb_sunny_outlined,
-                        color: AppColors.textOnPrimary,
-                        size: 30,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  greeting(DateTime.now(), controller.name),
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const Text('Um passo de cada vez.'),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          IconButton(
+                            tooltip: 'Perfil e configurações',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 48,
+                              height: 48,
+                            ),
+                            onPressed: () => widget.onSelectTab != null
+                                ? widget.onSelectTab!(3)
+                                : _open(const ProfilePage()),
+                            icon: UserAvatar(name: controller.name),
+                          ),
+                        ],
                       ),
-                      SizedBox(height: 16),
-                      Text(
-                        'Seu dia começa aqui',
-                        style: TextStyle(
-                          color: AppColors.textOnPrimary,
-                          fontSize: 21,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(height: 6),
-                      Text(
-                        'Organize suas prioridades sem esquecer de você.',
-                        style: TextStyle(
-                          color: AppColors.textOnPrimary,
-                          fontSize: 15,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 28),
-                const Text(
-                  'Organize sua rotina',
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _QuickCard(
-                        icon: Icons.check_circle_outline_rounded,
-                        title: 'Tarefas',
-                        description: controller.pendingTasks == null
-                            ? 'Carregando tarefas…'
-                            : counted(
-                                controller.pendingTasks!,
-                                'tarefa pendente',
-                                'tarefas pendentes',
+                      const SizedBox(height: AppSpacing.md),
+                      PlannerSurface(
+                        color: AppColors.primarySoft,
+                        outlined: false,
+                        child: Row(
+                          children: [
+                            const FigmaIcon(FigmaSymbol.sun),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    brazilianLongDate(DateTime.now()),
+                                    style: const TextStyle(
+                                      color: AppColors.primaryInk,
+                                    ),
+                                  ),
+                                  Text(
+                                    controller.loading
+                                        ? 'Atualizando seu dia…'
+                                        : controller.hasError
+                                        ? 'Alguns dados estão indisponíveis.'
+                                        : '${counted(today.length, 'tarefa', 'tarefas')} · ${counted(controller.todayRoutine?.length ?? 0, 'compromisso', 'compromissos')} · tempo para você',
+                                  ),
+                                ],
                               ),
-                        color: AppColors.primaryLight,
-                        onTap: () => _open(
-                          TasksPage(
-                            storage: LocalTaskStorage(
-                              preferences: AppScope.preferencesOf(context),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (controller.hasError)
+                        TextButton(
+                          onPressed: controller.loading
+                              ? null
+                              : controller.load,
+                          child: const Text('Tentar novamente'),
+                        ),
+                      const SizedBox(height: AppSpacing.md),
+                      AppointmentCard(
+                        activity: controller.nextAppointment,
+                        onTap: widget.onSelectTab == null
+                            ? null
+                            : () => widget.onSelectTab!(1),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        spacing: AppSpacing.lg,
+                        runSpacing: AppSpacing.xs,
+                        children: [
+                          Text(
+                            'Tarefas do dia',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          Text('$completed de ${today.length} feitas'),
+                        ],
+                      ),
+                      if (controller.tasks.error != null)
+                        const PlannerEmptyState(
+                          title: 'Vamos tentar novamente?',
+                          message: 'Suas tarefas não puderam ser carregadas. Seus dados foram preservados.',
+                        )
+                      else if (today.isEmpty)
+                        const PlannerEmptyState(
+                          title: 'Um passo de cada vez',
+                          message: 'Seu dia tem espaço. Adicione uma tarefa quando fizer sentido.',
+                        )
+                      else
+                        ...List.generate(
+                          today.length,
+                          (index) => Column(
+                            children: [
+                              if (index != 0) const Divider(height: 1),
+                              TaskCard(
+                                task: today[index],
+                                compact: true,
+                                enabled: !controller.tasks.saving,
+                                onToggle: () => _toggle(today[index]),
+                                onEdit: () => _edit(today[index]),
+                                onDelete: () => _delete(today[index]),
+                              ),
+                            ],
+                          ),
+                        ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          key: const ValueKey('all-tasks'),
+                          onPressed: () => _open(
+                            TasksPage(
+                              storage: LocalTaskStorage(
+                                preferences: controller.preferences,
+                              ),
+                            ),
+                          ),
+                          child: const Text('Ver todas as tarefas'),
+                        ),
+                      ),
+                      if (controller.settings.careBreaks) ...[
+                        CarePrompt(
+                          onTap: () => widget.onSelectTab != null
+                              ? widget.onSelectTab!(2)
+                              : _open(const SelfCarePage()),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
+                      ElevatedButton.icon(
+                        key: const ValueKey('add-task'),
+                        onPressed:
+                            controller.tasks.loading ||
+                                controller.tasks.error != null ||
+                                controller.tasks.saving
+                            ? null
+                            : () => _edit(),
+                        icon: const FigmaIcon(FigmaSymbol.plus),
+                        label: const Text('Adicionar tarefa'),
+                      ),
+                      if (_feedback != null) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        Semantics(
+                          liveRegion: true,
+                          child: PlannerSurface(
+                            outlined: false,
+                            color: AppColors.secondarySoft,
+                            child: Row(
+                              children: [
+                                const FigmaIcon(FigmaSymbol.success),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    _feedback!,
+                                    style: const TextStyle(
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: _QuickCard(
-                        icon: Icons.calendar_month_outlined,
-                        title: 'Rotina',
-                        description: controller.todayRoutine == null
-                            ? 'Carregando rotina…'
-                            : counted(
-                                controller.todayRoutine!.length,
-                                'compromisso hoje',
-                                'compromissos hoje',
-                              ),
-                        color: AppColors.secondaryLight,
-                        onTap: () => _open(const RoutinePage()),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _QuickCard(
-                  icon: Icons.self_improvement_rounded,
-                  title: 'Autocuidado',
-                  description: controller.pendingSelfCare == null
-                      ? 'Carregando autocuidado…'
-                      : counted(
-                          controller.pendingSelfCare!,
-                          'atividade pendente',
-                          'atividades pendentes',
-                        ),
-                  color: AppColors.surfaceSoft,
-                  onTap: () => _open(const SelfCarePage()),
-                ),
-                if (controller.todayRoutine?.isNotEmpty ?? false) ...[
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Hoje na sua rotina',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+                      ],
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  ...controller.todayRoutine!
-                      .take(3)
-                      .map(
-                        (item) => ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            item.completed
-                                ? Icons.check_circle_outline
-                                : Icons.schedule,
-                            color: AppColors.primaryDark,
-                          ),
-                          title: Text(item.title),
-                          subtitle: Text(
-                            item.minutes == null
-                                ? item.category
-                                : '${(item.minutes! ~/ 60).toString().padLeft(2, '0')}:${(item.minutes! % 60).toString().padLeft(2, '0')} • ${item.category}',
-                          ),
-                          onTap: () => _open(const RoutinePage()),
-                        ),
-                      ),
-                ],
-              ],
+                ),
+              ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickCard extends StatelessWidget {
-  const _QuickCard({
-    required this.icon,
-    required this.title,
-    required this.description,
-    required this.color,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String description;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: '$title. $description',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, color: AppColors.primaryDark, size: 30),
-              const SizedBox(height: 18),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                description,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                  height: 1.35,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

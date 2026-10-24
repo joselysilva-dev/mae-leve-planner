@@ -88,7 +88,11 @@ class TasksController extends ChangeNotifier {
   }
 
   Future<bool> save(Task task) {
-    if (task.title.trim().isEmpty) return Future.value(false);
+    if (task.title.trim().isEmpty ||
+        (task.minutes != null &&
+            (task.minutes! < 0 || task.minutes! >= 1440))) {
+      return Future.value(false);
+    }
     final next = [..._tasks];
     final index = next.indexWhere((item) => item.id == task.id);
     if (index < 0) {

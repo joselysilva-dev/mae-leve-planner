@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../app/app_scope.dart';
 import '../../../profile/data/profile_storage.dart';
-import '../../../home/presentation/pages/home_page.dart';
+import '../../../../app/main_shell.dart';
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
@@ -22,7 +22,7 @@ class _WelcomePageState extends State<WelcomePage> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute<void>(builder: (_) => const HomePage()),
+        MaterialPageRoute<void>(builder: (_) => const MainShell()),
       );
     } catch (_) {
       if (!mounted) return;
