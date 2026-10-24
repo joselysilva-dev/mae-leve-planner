@@ -66,3 +66,9 @@ devem fazer parte da prepara√ß√£o da apresenta√ß√£o.
 
 As cores e o tema est√£o em `lib/core/theme/`. Os arquivos oficiais permanecem
 em `assets/images/branding/`; o launcher Android usa c√≥pias do s√≠mbolo.
+
+## DemonstraÁ„o do aplicativo
+
+Assista ao funcionamento do M„e Leve Planner em um aparelho Android:
+
+[?? Ver vÌdeo de demonstraÁ„o](docs/demo/mae-leve-planner-demonstracao.mp4)
