@@ -23,12 +23,38 @@ class ProfileStorage {
 
   Future<void> saveName(String name) async {
     final current = await load();
-    await _save(UserSettings(name: name.trim(), onboarded: current.onboarded));
+    await _save(current.copyWith(name: name.trim()));
   }
 
   Future<void> completeOnboarding() async {
     final current = await load();
-    await _save(UserSettings(name: current.name, onboarded: true));
+    await _save(current.copyWith(onboarded: true));
+  }
+
+  Future<UserSettings> saveProfile({
+    required String name,
+    required String presentation,
+  }) async {
+    final next = (await load()).copyWith(
+      name: name.trim(),
+      presentation: presentation.trim(),
+    );
+    await _save(next);
+    return next;
+  }
+
+  Future<UserSettings> savePreferences({
+    bool? taskReminders,
+    bool? careBreaks,
+    bool? largeText,
+  }) async {
+    final next = (await load()).copyWith(
+      taskReminders: taskReminders,
+      careBreaks: careBreaks,
+      largeText: largeText,
+    );
+    await _save(next);
+    return next;
   }
 
   Future<void> _save(UserSettings settings) =>

@@ -32,11 +32,12 @@ void main() {
 
   Future<void> saveForm(WidgetTester tester) async {
     await tester.scrollUntilVisible(
-      find.text('Salvar'),
+      find.byKey(const ValueKey('save-form')),
       120,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('Salvar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('save-form')));
     await tester.pumpAndSettle();
   }
 
@@ -78,22 +79,22 @@ void main() {
     expect((await ProfileStorage(preferences).load()).onboarded, isFalse);
   });
 
-  testWidgets('cards da Home abrem Rotina e Autocuidado e voltam', (
+  testWidgets('abas abrem Agenda e Autocuidado e retornam ao Início', (
     tester,
   ) async {
     await app(tester);
-    await tester.tap(find.text('Rotina'));
+    await tester.tap(find.byKey(const ValueKey('tab-1')));
     await tester.pumpAndSettle();
     expect(find.byType(RoutinePage), findsOneWidget);
     expect(find.text('Um dia com espaço para o que importa'), findsOneWidget);
-    await tester.tap(find.byType(BackButton));
+    await tester.tap(find.byKey(const ValueKey('tab-0')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Autocuidado'));
-    await tester.tap(find.text('Autocuidado'));
+    await tester.ensureVisible(find.byKey(const ValueKey('tab-2')));
+    await tester.tap(find.byKey(const ValueKey('tab-2')));
     await tester.pumpAndSettle();
     expect(find.byType(SelfCarePage), findsOneWidget);
     expect(find.text('Um momento só seu'), findsOneWidget);
-    await tester.tap(find.byType(BackButton));
+    await tester.tap(find.byKey(const ValueKey('tab-0')));
     await tester.pumpAndSettle();
     expect(find.byType(HomePage), findsOneWidget);
   });
@@ -106,11 +107,16 @@ void main() {
       '$feature: criação, edição, conclusão, exclusão e confirmação',
       (tester) async {
         await app(tester);
-        await tester.ensureVisible(find.text(feature));
-        await tester.tap(find.text(feature));
+        await tester.tap(find.byKey(ValueKey(routine ? 'tab-1' : 'tab-2')));
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.byKey(ValueKey(routine ? 'add-appointment' : 'add-care')),
+          150,
+          scrollable: find.byType(Scrollable).first,
+        );
         await tester.pumpAndSettle();
         await tester.tap(
-          find.text(routine ? 'Novo compromisso' : 'Nova atividade'),
+          find.byKey(ValueKey(routine ? 'add-appointment' : 'add-care')),
         );
         await tester.pumpAndSettle();
         await saveForm(tester);
@@ -129,6 +135,7 @@ void main() {
           120,
           scrollable: find.byType(Scrollable).first,
         );
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Opções de Atividade de teste'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Editar'));
@@ -143,6 +150,7 @@ void main() {
           120,
           scrollable: find.byType(Scrollable).first,
         );
+        await tester.pumpAndSettle();
         await tester.tap(find.byType(Checkbox));
         await tester.pumpAndSettle();
         expect((await storage().load()).single.completed, isTrue);
@@ -152,6 +160,7 @@ void main() {
             -120,
             scrollable: find.byType(Scrollable).first,
           );
+          await tester.pumpAndSettle();
           await tester.tap(find.text('Pendentes'));
           await tester.pumpAndSettle();
           expect(find.text('Atividade editada'), findsNothing);
@@ -163,6 +172,7 @@ void main() {
           120,
           scrollable: find.byType(Scrollable).first,
         );
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Opções de Atividade editada'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Excluir'));
@@ -237,7 +247,7 @@ void main() {
         ),
       ]);
       await app(tester);
-      await tester.tap(find.text('Rotina'));
+      await tester.tap(find.byKey(const ValueKey('tab-1')));
       await tester.pumpAndSettle();
       expect(find.text('Hoje'), findsNWidgets(2));
       await tester.tap(find.byTooltip('Próxima semana'));
@@ -246,10 +256,10 @@ void main() {
       await tester.tap(find.byTooltip('Semana anterior'));
       await tester.pumpAndSettle();
       expect(find.text('Outra semana'), findsNothing);
-      await tester.tap(find.byType(ChoiceChip).first);
+      await tester.tap(find.byKey(const ValueKey('agenda-day-0')));
       await tester.pumpAndSettle();
-      final monday = now.subtract(Duration(days: now.weekday - 1));
-      expect(find.text('Seu dia: ${brazilianDate(monday)}'), findsOneWidget);
+      final firstDay = now.subtract(const Duration(days: 1));
+      expect(find.text(brazilianLongDate(firstDay)), findsOneWidget);
     },
   );
 
@@ -257,8 +267,10 @@ void main() {
     tester,
   ) async {
     await app(tester);
-    await tester.ensureVisible(find.text('Autocuidado'));
-    await tester.tap(find.text('Autocuidado'));
+    await tester.ensureVisible(find.byKey(const ValueKey('tab-2')));
+    await tester.tap(find.byKey(const ValueKey('tab-2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Uma pausa também é cuidado'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Fazer uma pausa'));
     await tester.pumpAndSettle();
@@ -274,13 +286,36 @@ void main() {
     await app(tester);
     await tester.tap(find.byTooltip('Perfil e configurações'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'Josely');
-    await tester.tap(find.text('Salvar nome'));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('edit-profile')),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('edit-profile')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('profile-name')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('profile-name')),
+      'Josely',
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('save-profile')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('save-profile')));
     await tester.pumpAndSettle();
     expect((await ProfileStorage(preferences).load()).name, 'Josely');
-    await tester.tap(find.byType(BackButton));
+    await tester.tap(find.byKey(const ValueKey('tab-0')));
     await tester.pumpAndSettle();
-    expect(find.text('Olá, Josely! 👋'), findsOneWidget);
+    expect(find.text(greeting(DateTime.now(), 'Josely')), findsOneWidget);
   });
 
   testWidgets(
@@ -301,7 +336,12 @@ void main() {
       await app(tester);
       await tester.tap(find.byTooltip('Perfil e configurações'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Limpar dados'));
+      await tester.scrollUntilVisible(
+        find.text('Limpar dados'),
+        150,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Limpar dados'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Cancelar'));
@@ -347,10 +387,18 @@ void main() {
       preferences,
     ).save([PlannedActivity.create(title: 'Descanso', category: 'Descanso')]);
     await app(tester);
-    expect(find.text('0 tarefas pendentes'), findsOneWidget);
-    expect(find.text('1 compromisso hoje'), findsOneWidget);
-    expect(find.text('1 atividade pendente'), findsOneWidget);
-    await tester.tap(find.text('Tarefas'));
+    expect(
+      find.text('0 tarefas · 1 compromisso · tempo para você'),
+      findsOneWidget,
+    );
+    expect(find.text('Consulta'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('all-tasks')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('all-tasks')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Nova tarefa'));
     await tester.pumpAndSettle();
@@ -358,16 +406,32 @@ void main() {
     await saveForm(tester);
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
-    expect(find.text('1 tarefa pendente'), findsOneWidget);
+    expect(
+      find.text('1 tarefa · 1 compromisso · tempo para você'),
+      findsOneWidget,
+    );
+    expect(find.text('Fazer compras'), findsOneWidget);
   });
 
   testWidgets('calendário é pt-BR e data usa dd/MM/yyyy', (tester) async {
     await app(tester);
-    await tester.tap(find.text('Tarefas'));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('all-tasks')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('all-tasks')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Nova tarefa'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Adicionar data (opcional)'));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('choose-date')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('choose-date')));
     await tester.pumpAndSettle();
     final pickerContext = tester.element(find.byType(DatePickerDialog));
     expect(Localizations.localeOf(pickerContext), const Locale('pt', 'BR'));
@@ -377,7 +441,7 @@ void main() {
     );
     await tester.tap(find.text('Confirmar'));
     await tester.pumpAndSettle();
-    expect(find.text('Data: ${brazilianDate(DateTime.now())}'), findsOneWidget);
+    expect(find.text(brazilianDate(DateTime.now())), findsOneWidget);
   });
 
   testWidgets('Rotina e Autocuidado suportam tela estreita e texto ampliado', (
@@ -410,15 +474,22 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(
+        find.byKey(ValueKey(routine ? 'add-appointment' : 'add-care')),
+        150,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(
-        find.text(routine ? 'Novo compromisso' : 'Nova atividade'),
+        find.byKey(ValueKey(routine ? 'add-appointment' : 'add-care')),
       );
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-        find.text('Salvar'),
+        find.byKey(const ValueKey('save-form')),
         120,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     }
   });
