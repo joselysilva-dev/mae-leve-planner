@@ -1,7 +1,38 @@
 # Mãe Leve Planner
 
-Projeto acadêmico desenvolvido por Josely para apresentação na DIO.
-Planejamento, organização e autocuidado, com dados guardados no aparelho.
+Projeto final da **Formação UX Designer da DIO**, desenvolvido por **Josely da Silva Lima** para o desafio **“Implementando Todas as Etapas para a Criação de um Protótipo Profissional”**.
+
+Conciliar maternidade, tarefas, compromissos e autocuidado pode exigir ferramentas dispersas ou complexas. O Mãe Leve Planner propõe centralizar essas demandas em uma experiência mobile simples e acolhedora: **sua rotina mais leve, um dia de cada vez**.
+
+Além dos entregáveis de design, o projeto inclui um **aplicativo funcional em Flutter**, com dados guardados no aparelho.
+
+## Entregáveis do projeto
+
+- [Briefing do projeto](docs/briefing.md)
+- [Wireframe no Figma](https://www.figma.com/design/ljBWF5bIxgbkVPZCY0INf5/M%C3%A3e-Leve-Planner-%E2%80%94-Wireframe-DIO?node-id=0-1&p=f)
+- [Design System e protótipo navegável no Figma](https://www.figma.com/design/B13cFXVeHsfU28LNBcAyYb/M%C3%A3e-Leve-Planner-%E2%80%94-Design-System-DIO?node-id=24-1768)
+- [Vídeo de demonstração do aplicativo](docs/demo/mae-leve-planner-demonstracao.mp4)
+- [Código-fonte no GitHub](https://github.com/joselysilva-dev/mae-leve-planner)
+
+## Etapas do desafio
+
+- [x] Briefing do projeto
+- [x] Wireframe
+- [x] Design System
+- [x] Mockup navegável
+- [x] Protótipo final no Figma
+- [x] Aplicativo funcional em Flutter
+- [x] Demonstração em vídeo
+- [x] Repositório organizado para portfólio
+
+## Resultados de qualidade
+
+- `flutter analyze`: nenhum problema.
+- `flutter test`: **46 testes aprovados**.
+- APK debug e APK release gerados; APK release instalado e validado em aparelho Android, conforme confirmação da autoria para esta entrega.
+- Principais fluxos registrados no vídeo de demonstração.
+
+Os resultados de análise, testes e build debug pertencem à etapa anterior de implementação. A validação do release no aparelho e o registro em vídeo foram informados pela autoria. Esta atualização é somente documental; não executa novamente essas verificações. Veja o [briefing](docs/briefing.md) para contexto, processo e limitações.
 
 ## Interface e navegação
 
@@ -100,8 +131,8 @@ automática. O lembrete é somente uma preferência local; o aplicativo informa
 isso nos controles. E-mail não foi adicionado ao modelo nem há envio de resumos.
 Desinstalar ou limpar os dados remove o armazenamento local.
 
-Os testes usam preferências simuladas. A instalação e o uso em um aparelho real
-continuam fazendo parte da preparação da apresentação. A interface respeita
+Os testes usam preferências simuladas e complementam a validação em aparelho Android.
+A interface respeita
 fonte do sistema, SafeArea e rolagem; o texto ampliado local aumenta a escala
 mínima sem diminuir a configuração do aparelho.
 
@@ -116,9 +147,3 @@ flutter test test/prototype_test.dart --dart-define=CAPTURE_PROTOTYPE=true --pla
 
 As cinco imagens ficam em `.dart_tool/prototype-review/`, fora do Git.
 A barra de sistema é nativa do Android; os indicadores iOS do desenho não são simulados.
-
-## Demonstração do aplicativo
-
-[Ver vídeo de demonstração do MVP](docs/demo/mae-leve-planner-demonstracao.mp4)
-
-O vídeo existente documenta a versão anterior ao alinhamento visual.
